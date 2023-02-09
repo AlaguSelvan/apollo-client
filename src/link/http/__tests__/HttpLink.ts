@@ -1504,5 +1504,99 @@ describe('HttpLink', () => {
         }),
       );
     });
+
+    describe.only('subscriptions', () => {
+      const subscribtionsBody = [
+        '---',
+        'Content-Type: application/json',
+        '',
+        '{}',
+        '---',
+        'Content-Type: application/json',
+        '',
+        '{"payload":{"data":{"aNewDieWasCreated":{"die":{"color":"red","roll":1,"sides":4}}}},"done":false}',
+        '---',
+        'Content-Type: application/json',
+        '',
+        '{"payload":{"data":{"aNewDieWasCreated":{"die":{"color":"blue","roll":2,"sides":5}}}},"done":false}',
+        '-----',
+        'Content-Type: application/json',
+        '',
+        '{"done": true}',
+        '-----',
+      ].join("\r\n");
+
+      it('subscriptionsmultipart whatwg stream bodies', (done) => {
+        const stream = new ReadableStream({
+          async start(controller) {
+            const lines = subscribtionsBody.split("\r\n");
+            try {
+              for (const line of lines) {
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                controller.enqueue(line + "\r\n");
+              }
+            } finally {
+              controller.close();
+            }
+          },
+        });
+
+        const fetch = jest.fn(async () => ({
+          status: 200,
+          body: stream,
+          headers: new Headers({ 'content-type': 'multipart/mixed' }),
+        }));
+
+        const link = new HttpLink({
+          fetch: fetch as any,
+        });
+
+        let i = 0;
+        execute(link, { query: sampleDeferredQuery }).subscribe(
+          result => {
+            try {
+              if (i === 0) {
+                expect(result).toEqual({
+                  data: {
+                    aNewDieWasCreated: {
+                      die: {
+                        color: "red",
+                        roll: 1,
+                        sides: 4
+                      }
+                    }
+                  }
+                });
+              } else if (i === 1) {
+                expect(result).toEqual({
+                  data: {
+                    aNewDieWasCreated: {
+                      die: {
+                        color: 'blue',
+                        roll: 2,
+                        sides: 5
+                      }
+                    }
+                  }
+                });
+              }
+            } catch (err) {
+              done(err);
+            } finally {
+              i++;
+            }
+          },
+          err => {
+            done(err);
+          },
+          () => {
+            if (i !== 2) {
+              done(new Error("Unexpected end to observable"));
+            }
+            done();
+          },
+        );
+      });
+    });
   });
 });

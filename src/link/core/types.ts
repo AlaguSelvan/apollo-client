@@ -21,10 +21,7 @@ export interface ExecutionPatchInitialResult<
   extensions?: TExtensions;
 }
 
-export interface IncrementalPayload<
-  TData,
-  TExtensions,
-> {
+export interface IncrementalPayload<TData, TExtensions> {
   // data and path must both be present
   // https://github.com/graphql/graphql-spec/pull/742/files#diff-98d0cd153b72b63c417ad4238e8cc0d3385691ccbde7f7674bc0d2a718b896ecR288-R293
   data: TData | null;
@@ -46,6 +43,21 @@ export interface ExecutionPatchIncrementalResult<
   // https://github.com/robrichard/defer-stream-wg/discussions/50#discussioncomment-3466739
   errors?: never;
   extensions?: never;
+}
+
+export interface ExecutionPayloadPatchResult<
+  TData = Record<string, any>,
+  TExtensions = Record<string, any>
+> {
+  payload: SingleExecutionResult | ExecutionPatchResult;
+  // Transport layer errors (as distinct from GraphQL or NetworkErrors),
+  // these are fatal errors that will include done: true.
+  data?: never;
+  // TODO: is GraphQLError[] appropriate here?
+  errors?: GraphQLError[];
+  // Done is only ever present as `done: true` on the final chunk
+  // (or when fatal errors occur).
+  done?: true;
 }
 
 export type ExecutionPatchResult<
@@ -87,7 +99,8 @@ export type FetchResult<
   TExtensions = Record<string, any>
 > =
   | SingleExecutionResult<TData, TContext, TExtensions>
-  | ExecutionPatchResult<TData, TExtensions>;
+  | ExecutionPatchResult<TData, TExtensions>
+  | ExecutionPayloadPatchResult<TData, TExtensions>;
 
 export type NextLink = (operation: Operation) => Observable<FetchResult>;
 

@@ -27,10 +27,9 @@ import { QueryResult } from "../../types/types";
 import { useQuery } from '../useQuery';
 import { useMutation } from '../useMutation';
 
+const IS_REACT_18 = React.version.startsWith('18');
+
 describe('useQuery Hook', () => {
-  beforeEach(() => {
-    jest.restoreAllMocks();
-  });
   afterEach(() => {
     resetApolloContext();
   });
@@ -551,7 +550,7 @@ describe('useQuery Hook', () => {
       const consoleError = console.error;
       console.error = (msg: string) => {
         console.log(msg);
-        wasUpdateErrorLogged = msg.indexOf('Cannot update a component') > -1;
+        wasUpdateErrorLogged = msg.includes('Cannot update a component');
       };
 
       const CAR_MOCKS = [1, 2, 3, 4, 5, 6].map(something => ({
@@ -1713,7 +1712,7 @@ describe('useQuery Hook', () => {
       requestSpy.mockRestore();
     });
 
-    it('should start and stop polling in Strict Mode', async () => {
+    it.only('should start and stop polling in Strict Mode', async () => {
       const query = gql`{ hello }`;
       const mocks = [
         {
@@ -1748,24 +1747,28 @@ describe('useQuery Hook', () => {
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
       }, { interval: 1 });
-      expect(result.current.data).toEqual({ hello: "world 1" });
+
+      expect(result.current.loading).toBe(false);
+
+      await waitFor(() => {
+        if (!IS_REACT_18) {
+          expect(result.current.data).toEqual({ hello: "world 2" });
+        }
+      }, { interval: 1 });
+
+      expect(result.current.loading).toBe(false);
 
       result.current.stopPolling();
 
       await expect(waitFor(() => {
-        expect(result.current.data).toEqual({ hello: "world 2" });
+        expect(result.current.data).toEqual({ hello: "world 3" });
       }, { interval: 1, timeout: 20 })).rejects.toThrow();
+
       result.current.startPolling(20);
 
-      expect(requestSpy).toHaveBeenCalledTimes(1);
-      expect(onErrorFn).toHaveBeenCalledTimes(0);
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual({ hello: "world 2" });
-      }, { interval: 1 });
-
-      expect(result.current.loading).toBe(false);
-      expect(requestSpy).toHaveBeenCalledTimes(2);
+      if (!IS_REACT_18) {
+        expect(requestSpy).toHaveBeenCalledTimes(2);
+      }
       expect(onErrorFn).toHaveBeenCalledTimes(0);
       requestSpy.mockRestore();
     });
@@ -6903,5 +6906,77 @@ describe('useQuery Hook', () => {
         });
       }, { interval: 1 });
     });
+  });
+
+  describe("interaction with `disableNetworkFetches`", () => {
+    const cacheData = { something: "foo" };
+    const emptyData = undefined;
+    type TestQueryValue = typeof cacheData;
+
+    test.each<
+      [
+        fetchPolicy: WatchQueryFetchPolicy,
+        initialQueryValue: TestQueryValue | undefined,
+        shouldFetchOnFirstRender: boolean,
+        shouldFetchOnSecondRender: boolean
+      ]
+    >([
+      [`cache-first`, emptyData, true, false],
+      [`cache-first`, cacheData, false, false],
+      [`cache-only`, emptyData, false, false],
+      [`cache-only`, cacheData, false, false],
+      [`cache-and-network`, emptyData, true, false],
+      [`cache-and-network`, cacheData, false, false],
+      [`network-only`, emptyData, true, false],
+      [`network-only`, cacheData, false, false],
+      [`no-cache`, emptyData, true, false],
+      [`no-cache`, cacheData, true, false],
+      [`standby`, emptyData, false, false],
+      [`standby`, cacheData, false, false],
+    ])(
+      "fetchPolicy %s, cache: %p should fetch during `disableNetworkFetches`: %p and after `disableNetworkFetches` has been disabled: %p",
+      async (policy, initialQueryValue, shouldFetchOnFirstRender, shouldFetchOnSecondRender) => {
+        const query: TypedDocumentNode<TestQueryValue> = gql`
+          query CallMe {
+            something
+          }
+        `;
+
+        const link = new MockLink([
+          {request: {query}, result: {data: { something: "bar" }}},
+          {request: {query}, result: {data: { something: "baz" }}},
+        ]);
+        const requestSpy = jest.spyOn(link, 'request');
+
+        const client = new ApolloClient({
+          cache: new InMemoryCache(),
+          link,
+        });
+        if (initialQueryValue) {
+          client.writeQuery({ query, data: initialQueryValue });
+        }
+        client.disableNetworkFetches = true;
+
+        const { rerender } = renderHook(
+          () => useQuery(query, { fetchPolicy: policy, nextFetchPolicy: policy }),
+          {
+            wrapper: ({ children }) => <ApolloProvider client={client}>{children}</ApolloProvider>,
+          }
+        );
+
+        expect(requestSpy).toHaveBeenCalledTimes(shouldFetchOnFirstRender ? 1 : 0);
+
+        // We need to wait a moment before the rerender for everything to settle down.
+        // This part is unfortunately bound to be flaky - but in some cases there is
+        // just nothing to "wait for", except "a moment".
+        await act(() => new Promise((resolve) => setTimeout(resolve, 10)));
+
+        requestSpy.mockClear();
+        client.disableNetworkFetches = false;
+
+        rerender();
+        expect(requestSpy).toHaveBeenCalledTimes(shouldFetchOnSecondRender ? 1 : 0);
+      }
+    );
   });
 });

@@ -68,7 +68,14 @@ const standardReact17Config = {
   },
 };
 
+const reporters =
+  process.env.TEST_ENV === "ci"
+    ? [["github-actions", { silent: false }], "summary"]
+    : undefined;
+
 module.exports = {
+  workerIdleMemoryLimit: 0.2,
+  reporters,
   projects: [
     tsStandardConfig,
     standardReact17Config,

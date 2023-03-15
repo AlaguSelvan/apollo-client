@@ -1,5 +1,11 @@
 # @apollo/client
 
+## 3.7.11
+
+### Patch Changes
+
+- [#10629](https://github.com/apollographql/apollo-client/pull/10629) [`02605bb3c`](https://github.com/apollographql/apollo-client/commit/02605bb3c9e148bf87a6e52b4a9ecc7d523ef9f6) Thanks [@phryneas](https://github.com/phryneas)! - `useQuery`: delay unsubscribe to fix race conditions
+
 ## 3.7.10
 
 ### Patch Changes

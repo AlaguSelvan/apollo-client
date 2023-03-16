@@ -1,5 +1,11 @@
 # @apollo/client
 
+## 3.8.0-alpha.10
+
+### Patch Changes
+
+- [#10651](https://github.com/apollographql/apollo-client/pull/10651) [`8355d0e1e`](https://github.com/apollographql/apollo-client/commit/8355d0e1e9c1cee58cabd7df68d3ba09a3afaf6c) Thanks [@jerelmiller](https://github.com/jerelmiller)! - Fixes an issue where `useSuspenseQuery` would not respond to cache updates when using a cache-first `fetchPolicy` after the hook was mounted with data already in the cache.
+
 ## 3.8.0-alpha.9
 
 ### Patch Changes
